@@ -50,12 +50,12 @@ namespace gmsnippet {
     if (mbstowcs(searchDoc_.get(), file, searchDocSize_) == (size_t)-1) {
       munmap(file, searchDocSize_);
       perror("Error");
-      std::runtime_error("Failed to switch to wide character set");
+      throw std::runtime_error("Failed to switch to wide character set");
     }
 
     if (munmap(file, searchDocSize_) == -1) {
       perror("Error");
-      std::runtime_error("Failed to free mapped file");
+      throw std::runtime_error("Failed to free mapped file");
     }
 
   }
