@@ -7,6 +7,7 @@
 
 #include <unordered_map>
 #include <sys/mman.h>
+#include <algorithm>
 #include <iostream>
 #include <unistd.h>
 #include <fstream>
@@ -14,13 +15,9 @@
 #include <string>
 #include <vector>
 #include <locale>
-#include <algorithm>
-#include <codecvt>
-#include <fcntl.h>
+#include <memory>
 
 //#define DEBUG 1
-
-using namespace std;
 
 namespace gmsnippet {
 
@@ -28,15 +25,13 @@ namespace gmsnippet {
 
     public:
 
-      ~Snippeter();
-
       // Initializes all main procedures for search document processing, namely:
       // counting tf-IDF for each term in text document and building document offset table
       // for faster sentences access
-      void initSnippeter(const string& filepath);
+      Snippeter(const std::string& filepath);
 
       // A common interface to get a snippet for a search query
-      wstring getSnippet(wstring query);
+      std::wstring getSnippet(std::wstring query) const;
 
     private:
 
@@ -44,9 +39,9 @@ namespace gmsnippet {
       //                     Text preprocessing routines
 
       // Opens search document and loads it into memory
-      void loadSearchDocument(const string& filepath);
+      void loadSearchDocument(const std::string& filepath);
 
-
+      // Goes through search document and finds word and sentence boundaries
       void parseSearchDocument();
 
       // Cuts a word out of search document and registers its occurrences
@@ -61,43 +56,44 @@ namespace gmsnippet {
       // candidate to be included in a snippet
       struct SentenceWeighingResult;
 
-      // An element of |tfTable| property
+      // An element of |tfTable_| property
       struct TFTableEntry;
 
       // Turns a search query string into a program-appropriate format
-      vector<wstring> getWordsFromQuery(wstring& query) const;
+      std::vector<std::wstring> getWordsFromQuery(std::wstring& query) const;
 
       // This function is in charge of processing the index and formatted query
       // so that "the best" snippet is created
-      wstring getBestSnippet(vector<wstring>& queryWords) const;
+      std::wstring getBestSnippet(std::vector<std::wstring>& queryWords) const;
 
       // Calculates weights for sentences that match search query words
-      vector<SentenceWeighingResult> getMaxWeightSentences(const vector<wstring>& queryWords, size_t startWordIndex) const;
+      std::vector<SentenceWeighingResult> getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const;
 
-      // Checks whether a |word| is met in |sentenceNum|
-      size_t getLowerTermTF(const wstring &word, size_t sentenceNum) const;
+      // Checks whether a |word| is met in |sentenceNum| and returns its TF on success
+      size_t getLowerTermTF(const std::wstring &word, size_t sentenceNum) const;
 
       // Finalizes snippet creation process
       // Returns a sentence that is to be present in the snippet
-      wstring getSentence(const SentenceWeighingResult&) const;
+      std::wstring getSentence(const SentenceWeighingResult&) const;
 
       // -------------------------------------------------------------------------
-      //                       Class State
+      //                            Class State
 
-      unordered_map<wstring, vector<TFTableEntry>> tfTable; // term -> < (sentenceNumber, tf), ... >
-      unordered_map<wstring, size_t> idfTable;
-      wchar_t* searchDoc = nullptr;
-      vector<size_t> offsetTable;
-      size_t searchDocSize;
+      std::unordered_map<std::wstring, std::vector<TFTableEntry>> tfTable_;
+      std::unordered_map<std::wstring, size_t> idfTable_;
+//      wchar_t* searchDoc_ = nullptr;
+      std::unique_ptr<wchar_t> searchDoc_;
+      std::vector<size_t> offsetTable_;
+      size_t searchDocSize_;
 
       // -------------------------------------------------------------------------
-      //                       Auxiliary classes
+      //                          Auxiliary classes
 
 
       struct TFTableEntry {
 
           // Sentence number in the search document.
-          // Figured out within |initSnippeter| method
+          // Figured out within |init| method
           size_t sentenceNumber;
 
           // Term Frequency in |sentenceNumber|'th sentence
@@ -112,12 +108,12 @@ namespace gmsnippet {
       struct SentenceWeighingResult {
 
           // A term the sentence is linked to (aka contains)
-          wstring term = L"";
+          std::wstring term = L"";
 
-          // The index of element in tfTable vector for the |term| argument
+          // The index of element in tfTable_ vector for the |term| argument
           size_t tfTableEntryIndex = 0;
 
-          // The index of element in tfTable vector for the |term| argument
+          // The index of element in tfTable_ vector for the |term| argument
           size_t documentSentenceNumber = 0;
 
           // Sentence weight, which is computed inside |getBestSnippet()|
@@ -125,7 +121,7 @@ namespace gmsnippet {
 
           SentenceWeighingResult() {};
 
-          SentenceWeighingResult(wstring term, double weight, size_t index, size_t sentenceNumber) :
+          SentenceWeighingResult(std::wstring term, double weight, size_t index, size_t sentenceNumber) :
                   term(term), tfTableEntryIndex(index), weight(weight), documentSentenceNumber(sentenceNumber) {};
 
           bool operator==(const SentenceWeighingResult& other) {
@@ -138,15 +134,13 @@ namespace gmsnippet {
 
       };
 
-
-
       // A static class with routines to ease text processing
       class TextUtils {
         public:
           // Removes any whitespace both in the beginning and the end of a wstring
-          static wstring trim(const wstring& str) {
+          static std::wstring trim(const std::wstring& str) {
             size_t first = str.find_first_not_of(' ');
-            if (string::npos == first) {
+            if (std::wstring::npos == first) {
               return str;
             }
             size_t last = str.find_last_not_of(' ');
@@ -154,12 +148,12 @@ namespace gmsnippet {
           }
 
           // Checks if a wstring is alpha-numeric
-          static bool isalnum(const wstring& str) {
-            return all_of(str.begin(), str.end(), [](wchar_t letter){ return iswalnum((wint_t)letter); });
+          static bool isalnum(const std::wstring& str) {
+            return std::all_of(str.begin(), str.end(), [](wchar_t letter){ return iswalnum((wint_t)letter); });
           }
 
-          static void lowercase(wstring& str) {
-            transform(str.begin(), str.end(), str.begin(), std::towlower);
+          static void lowercase(std::wstring& str) {
+            std::transform(str.begin(), str.end(), str.begin(), std::towlower);
           }
 
       };
