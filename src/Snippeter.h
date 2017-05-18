@@ -17,8 +17,6 @@
 #include <locale>
 #include <memory>
 
-//#define DEBUG 1
-
 namespace gmsnippet {
 
   class Snippeter {
@@ -30,6 +28,8 @@ namespace gmsnippet {
       // for faster sentences access
       Snippeter(const std::string& filepath);
 
+      ~Snippeter();
+
       // A common interface to get a snippet for a search query
       std::wstring getSnippet(std::wstring query) const;
 
@@ -39,7 +39,7 @@ namespace gmsnippet {
       //                     Text preprocessing routines
 
       // Opens search document and loads it into memory
-      void loadSearchDocument(const std::string& filepath);
+      bool loadSearchDocument(const std::string& filepath);
 
       // Goes through search document and finds word and sentence boundaries
       void parseSearchDocument();
@@ -67,7 +67,8 @@ namespace gmsnippet {
       std::wstring getBestSnippet(std::vector<std::wstring>& queryWords) const;
 
       // Calculates weights for sentences that match search query words
-      std::vector<SentenceWeighingResult> getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const;
+      std::vector<SentenceWeighingResult>
+      getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const;
 
       // Checks whether a |word| is met in |sentenceNum| and returns its TF on success
       size_t getLowerTermTF(const std::wstring &word, size_t sentenceNum) const;
@@ -81,14 +82,12 @@ namespace gmsnippet {
 
       std::unordered_map<std::wstring, std::vector<TFTableEntry>> tfTable_;
       std::unordered_map<std::wstring, size_t> idfTable_;
-//      wchar_t* searchDoc_ = nullptr;
-      std::unique_ptr<wchar_t> searchDoc_;
+      std::unique_ptr<wchar_t> searchDoc_{nullptr};
       std::vector<size_t> offsetTable_;
       size_t searchDocSize_;
 
       // -------------------------------------------------------------------------
       //                          Auxiliary classes
-
 
       struct TFTableEntry {
 
@@ -99,7 +98,7 @@ namespace gmsnippet {
           // Term Frequency in |sentenceNumber|'th sentence
           size_t tf;
 
-          explicit TFTableEntry(size_t sentenceNumber, size_t tf) :
+          TFTableEntry(size_t sentenceNumber, size_t tf) :
                    sentenceNumber(sentenceNumber), tf(tf) {};
 
       };
@@ -122,13 +121,13 @@ namespace gmsnippet {
           SentenceWeighingResult() {};
 
           SentenceWeighingResult(std::wstring term, double weight, size_t index, size_t sentenceNumber) :
-                  term(term), tfTableEntryIndex(index), weight(weight), documentSentenceNumber(sentenceNumber) {};
+                  term(term), tfTableEntryIndex(index), documentSentenceNumber(sentenceNumber), weight(weight) {};
 
-          bool operator==(const SentenceWeighingResult& other) {
+          bool operator==(const SentenceWeighingResult& other) const {
             return other.weight == weight && other.term == term && other.tfTableEntryIndex == tfTableEntryIndex;
           }
 
-          bool operator!=(const SentenceWeighingResult& other) {
+          bool operator!=(const SentenceWeighingResult& other) const {
             return !(this->operator==(other));
           }
 

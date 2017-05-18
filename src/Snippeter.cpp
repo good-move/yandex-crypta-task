@@ -5,11 +5,20 @@ namespace gmsnippet {
   Snippeter::
   Snippeter(const std::string& filepath)
   {
-    loadSearchDocument(filepath);
-    parseSearchDocument();
+    if (loadSearchDocument(filepath)) {
+      parseSearchDocument();
+    }
   }
 
-  void
+  Snippeter::
+  ~Snippeter()
+  {
+    if (searchDoc_.get() != nullptr) {
+      munmap(searchDoc_.get(), searchDocSize_ * sizeof(wchar_t));
+    }
+  }
+
+  bool
   Snippeter::
   loadSearchDocument(const std::string& filepath)
   {
@@ -18,7 +27,7 @@ namespace gmsnippet {
     if (searchFile == nullptr) {
       std::wcout << L"Не удалось открыть файл" << std::endl;
       perror("Error");
-      return;
+      return false;
     }
 
     int filed = fileno(searchFile);
@@ -26,29 +35,36 @@ namespace gmsnippet {
     if (seekResult == -1) {
       std::wcout << L"Не удалось подсчитать длину файла" << std::endl;
       perror("Error");
-      return;
+      return false;
     }
 
-    this->searchDocSize_ = (size_t) seekResult;
+    searchDocSize_ = (size_t) seekResult;
 
-    char* file = (char*) mmap(nullptr, this->searchDocSize_, PROT_READ, MAP_PRIVATE, filed, 0);
+    char* file = (char*) mmap(nullptr, searchDocSize_, PROT_READ, MAP_PRIVATE, filed, 0);
     fclose(searchFile);
 
     if (file == MAP_FAILED) {
       perror("Error");
       std::wcout << L"Не удалось загрузить файл" << std::endl;
-      throw std::runtime_error("Failed to map document " + filepath);
+      return false;
     }
 
-    this->searchDoc_ = std::unique_ptr<wchar_t>{new wchar_t[this->searchDocSize_ * sizeof(wchar_t)]};
+    searchDoc_.reset(new wchar_t[searchDocSize_]);
 
-    if (mbstowcs(this->searchDoc_.get(), file, this->searchDocSize_) == (size_t)-1) {
-      std::wcout << "Не удалось обработки текста" << std::endl;
-      munmap(file, this->searchDocSize_);
+    if (mbstowcs(searchDoc_.get(), file, searchDocSize_) == (size_t)-1) {
+      std::wcout << L"Не удалось обработки текста" << std::endl;
+      munmap(file, searchDocSize_);
       perror("Error");
+      return false;
     }
 
-    munmap(file, this->searchDocSize_);
+    if (munmap(file, searchDocSize_) == -1) {
+      perror("Error");
+      std::wcout << L"Не удалось освободить файл" << std::endl;
+      return false;
+    }
+
+    return true;
   }
 
   void
@@ -61,17 +77,17 @@ namespace gmsnippet {
     size_t sentenceNumber = 0;
     size_t wordStart = 0;
 
-    this->offsetTable_.push_back(0);
-    for (size_t pos = 0; pos < this->searchDocSize_ ; ++pos) {
+    offsetTable_.push_back(0);
+    for (size_t pos = 0; pos < searchDocSize_ ; ++pos) {
 
       current = searchDoc_.get()[pos];
-      if (current == L'\n' && previous == L'\n' ||
+      if ((current == L'\n' && previous == L'\n') ||
           current == L'.' || current == L'?'|| current ==  L'!') {
         setTfIdf(wordStart, pos, sentenceNumber);
-        this->offsetTable_.push_back(++pos);
+        offsetTable_.push_back(++pos);
         sentenceNumber++;
         while(!iswalnum((wint_t)searchDoc_.get()[pos])){ pos++; }
-        this->offsetTable_.push_back(pos);
+        offsetTable_.push_back(pos);
         wordStart = pos;
         sentenceNumber++;
       }
@@ -82,6 +98,13 @@ namespace gmsnippet {
       previous = current;
 
     }
+
+    // if text had no sentence finishing punctuation marks
+    if (sentenceNumber == 0) {
+      setTfIdf(wordStart, searchDocSize_, sentenceNumber);
+      offsetTable_.push_back(searchDocSize_);
+    }
+
   }
 
   void
@@ -102,7 +125,7 @@ namespace gmsnippet {
     try {
       idfTable_.at(word) += 1;
     } catch (std::out_of_range& e) {
-      this->idfTable_[word] = 1;
+      idfTable_[word] = 1;
     }
 
     // register term frequency for currently processed sentence
@@ -138,10 +161,6 @@ namespace gmsnippet {
   Snippeter::
   getWordsFromQuery(std::wstring& query) const
   {
-    #ifdef DEBUG
-    wprintf(L"Entered %s\n", __FUNCTION__);
-    #endif
-
     TextUtils::lowercase(query);
     std::wstringstream ss(query);
     if (ss.fail()) {
@@ -166,10 +185,6 @@ namespace gmsnippet {
 
     sort(queryWords.begin(), queryWords.end(), idfWordCmp);
 
-    #ifdef DEBUG
-    wprintf(L"Exiting %s\n", __FUNCTION__);
-    #endif
-
     return queryWords;
   }
 
@@ -177,15 +192,14 @@ namespace gmsnippet {
   Snippeter::
   getBestSnippet(std::vector<std::wstring>& queryWords) const
   {
-    #ifdef DEBUG
-    wprintf(L"Entered %s\n", __FUNCTION__);
-    #endif
-
     std::vector<SentenceWeighingResult> finalMatch(4);
     const auto& matches1 = getMaxWeightSentences(queryWords, 0);
     const auto& matches2 = getMaxWeightSentences(queryWords, 1);
 
     if (matches2.empty()) {
+      if (matches1[1].term == L"") {
+        return getSentence(matches1[0]);
+      }
       return getSentence(matches1[0]) + L" ... " + getSentence(matches1[1]);
     }
 
@@ -208,9 +222,9 @@ namespace gmsnippet {
       }
     }
 
-    #ifdef DEBUG
-      wprintf(L"Exiting 2 %s\n", __FUNCTION__);
-    #endif
+    if (finalMatch[1].term == L"") {
+      return getSentence(finalMatch[0]);
+    }
 
     return getSentence(finalMatch[0]) + L" ... " + getSentence(finalMatch[1]);
   }
@@ -226,10 +240,6 @@ namespace gmsnippet {
     // equal weight to maxMatch2
     SentenceWeighingResult maxMatch1, maxMatch2;
     double weightThreshold = 0;
-
-    #ifdef DEBUG
-    wprintf(L"Entered %s\n", __FUNCTION__);
-    #endif
 
     if (startWordIndex >= queryWords.size()) {
       return weighingResults;
@@ -260,18 +270,13 @@ namespace gmsnippet {
           maxMatch2 = maxMatch1;
           maxMatch1 = SentenceWeighingResult{strongerTerm, weight, tfTableEntryIndex, sentenceInfo.sentenceNumber};
         } else if (weight > maxMatch2.weight) {
-          maxMatch1 = SentenceWeighingResult{strongerTerm, weight, tfTableEntryIndex, sentenceInfo.sentenceNumber};
+          maxMatch2 = SentenceWeighingResult{strongerTerm, weight, tfTableEntryIndex, sentenceInfo.sentenceNumber};
         }
         weightThreshold = maxMatch2.weight;
       }
 
       tfTableEntryIndex++;
     }
-
-
-    #ifdef DEBUG
-    wprintf(L"Exiting %s\n", __FUNCTION__);
-    #endif
 
     weighingResults.push_back(maxMatch1);
     weighingResults.push_back(maxMatch2);
@@ -284,10 +289,6 @@ namespace gmsnippet {
   Snippeter::
   getLowerTermTF(const std::wstring& word, size_t sentenceNum) const
   {
-    #ifdef DEBUG
-    wprintf(L"Entered %s\n", __FUNCTION__);
-    #endif
-
     const auto& sentences = tfTable_.at(word);
 
     if (sentences.front().sentenceNumber > sentenceNum ||
@@ -308,10 +309,6 @@ namespace gmsnippet {
       }
     }
 
-    #ifdef DEBUG
-    wprintf(L"Exiting %s\n", __FUNCTION__);
-    #endif
-
     return (sentences[start].sentenceNumber == sentenceNum) * sentences[start].tf;
   }
 
@@ -319,10 +316,6 @@ namespace gmsnippet {
   Snippeter::
   getSentence(const SentenceWeighingResult& weighingResult) const
   {
-    #ifdef DEBUG
-    wprintf(L"Entered %s\n", __FUNCTION__);
-    #endif
-
     try {
       if (weighingResult.term == L"") {
         return L"";
@@ -331,18 +324,15 @@ namespace gmsnippet {
               .at(weighingResult.term)[weighingResult.tfTableEntryIndex]
               .sentenceNumber;
       size_t start = offsetTable_[sentenceNumber];
-      size_t end = offsetTable_[sentenceNumber + 1];
-
-      #ifdef DEBUG
-      wprintf(L"Exiting %s\n", __FUNCTION__);
-      #endif
+      size_t end;
+      try {
+        end = offsetTable_[sentenceNumber + 1];
+      } catch (std::out_of_range& e) {
+        end = searchDocSize_;
+      }
 
       return std::wstring(searchDoc_.get() + start, end - start);
     } catch (std::out_of_range& e) {
-
-      #ifdef DEBUG
-      wprintf(L"Exiting %s\n", __FUNCTION__);
-      #endif
 
       return L"";
     }
