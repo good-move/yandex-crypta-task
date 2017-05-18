@@ -5,9 +5,8 @@ namespace gmsnippet {
   Snippeter::
   Snippeter(const std::string& filepath)
   {
-    if (loadSearchDocument(filepath)) {
-      parseSearchDocument();
-    }
+    loadSearchDocument(filepath);
+    parseSearchDocument();
   }
 
   Snippeter::
@@ -18,24 +17,22 @@ namespace gmsnippet {
     }
   }
 
-  bool
+  void
   Snippeter::
   loadSearchDocument(const std::string& filepath)
   {
     FILE* searchFile = fopen(filepath.c_str(), "r");
 
     if (searchFile == nullptr) {
-      std::wcout << L"Не удалось открыть файл" << std::endl;
       perror("Error");
-      return false;
+      throw std::runtime_error("Failed to open file");
     }
 
     int filed = fileno(searchFile);
     long seekResult = lseek(filed, 0, SEEK_END);
     if (seekResult == -1) {
-      std::wcout << L"Не удалось подсчитать длину файла" << std::endl;
       perror("Error");
-      return false;
+      throw std::runtime_error("Failed to get file length");
     }
 
     searchDocSize_ = (size_t) seekResult;
@@ -45,26 +42,22 @@ namespace gmsnippet {
 
     if (file == MAP_FAILED) {
       perror("Error");
-      std::wcout << L"Не удалось загрузить файл" << std::endl;
-      return false;
+      throw std::runtime_error("Failed to load file into memory");
     }
 
     searchDoc_.reset(new wchar_t[searchDocSize_]);
 
     if (mbstowcs(searchDoc_.get(), file, searchDocSize_) == (size_t)-1) {
-      std::wcout << L"Не удалось обработки текста" << std::endl;
       munmap(file, searchDocSize_);
       perror("Error");
-      return false;
+      std::runtime_error("Failed to switch to wide character set");
     }
 
     if (munmap(file, searchDocSize_) == -1) {
       perror("Error");
-      std::wcout << L"Не удалось освободить файл" << std::endl;
-      return false;
+      std::runtime_error("Failed to free mapped file");
     }
 
-    return true;
   }
 
   void
@@ -174,7 +167,8 @@ namespace gmsnippet {
     while(!ss.eof()) {
       std::wstring word;
       ss >> word;
-      if (TextUtils::isalnum(word) && idfTable_.count(word) > 0) {
+      word = TextUtils::trim(word);
+      if (word.length() > 0 && TextUtils::isalnum(word) && idfTable_.count(word) > 0) {
         queryWords.push_back(word);
       }
     }
@@ -316,26 +310,18 @@ namespace gmsnippet {
   Snippeter::
   getSentence(const SentenceWeighingResult& weighingResult) const
   {
+    size_t sentenceNumber = tfTable_
+            .at(weighingResult.term)[weighingResult.tfTableEntryIndex]
+            .sentenceNumber;
+    size_t start = offsetTable_[sentenceNumber];
+    size_t end;
     try {
-      if (weighingResult.term == L"") {
-        return L"";
-      }
-      size_t sentenceNumber = tfTable_
-              .at(weighingResult.term)[weighingResult.tfTableEntryIndex]
-              .sentenceNumber;
-      size_t start = offsetTable_[sentenceNumber];
-      size_t end;
-      try {
-        end = offsetTable_[sentenceNumber + 1];
-      } catch (std::out_of_range& e) {
-        end = searchDocSize_;
-      }
-
-      return std::wstring(searchDoc_.get() + start, end - start);
+      end = offsetTable_[sentenceNumber + 1];
     } catch (std::out_of_range& e) {
-
-      return L"";
+      end = searchDocSize_;
     }
+
+    return std::wstring(searchDoc_.get() + start, end - start);
   }
 
 }

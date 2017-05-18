@@ -39,7 +39,7 @@ namespace gmsnippet {
       //                     Text preprocessing routines
 
       // Opens search document and loads it into memory
-      bool loadSearchDocument(const std::string& filepath);
+      void loadSearchDocument(const std::string& filepath);
 
       // Goes through search document and finds word and sentence boundaries
       void parseSearchDocument();

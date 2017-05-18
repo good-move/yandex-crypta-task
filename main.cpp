@@ -1,4 +1,4 @@
-#include "Snippeter.h"
+#include "src/Snippeter.h"
 #include <sys/time.h>
 
 using namespace gmsnippet;
@@ -11,7 +11,7 @@ int main(int argc, char* argv[])
   if (argc < 2) {
     wcout << L"Не указано имя файла, по которому производится поиск." << endl <<
              L"Использование:" << endl <<
-             L"1) less <файл с запросами> | main <имя файла>" << endl <<
+             L"1) less <файл с запросами> | snippeter <имя файла>" << endl <<
              L"2) запустите `main <имя файла>` и вводите запросы по одному в строке" << endl;
     return 0;
   }
