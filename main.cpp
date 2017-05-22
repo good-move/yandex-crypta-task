@@ -30,7 +30,7 @@ int main(int argc, char* argv[])
       gettimeofday(&tv_end, 0);
 
       wcout << snippet << endl;
-      wcout << L"Время формирования сниппета (мс): "
+      wcout << L"Время формирования сниппета (мкс): "
             << (tv_end.tv_usec - tv_start.tv_usec) << endl;
     }
   } catch(exception& e) {

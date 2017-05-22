@@ -77,8 +77,14 @@ namespace gmsnippet {
       // Returns a sentence that is to be present in the snippet
       std::wstring getSentence(const SentenceWeighingResult&) const;
 
+      size_t getSentenceLength(const size_t sentenceNumber) const;
+
       // -------------------------------------------------------------------------
       //                            Class State
+
+      // Expected Sentence Length
+      // Used in sentence weight measure to penalize sentences for length deviation
+      static const size_t ESL = 70;
 
       std::unordered_map<std::wstring, std::vector<TFTableEntry>> tfTable_;
       std::unordered_map<std::wstring, size_t> idfTable_;

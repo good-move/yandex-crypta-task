@@ -1,4 +1,3 @@
-#include <sys/stat.h>
 #include "Snippeter.h"
 
 namespace gmsnippet {
@@ -237,6 +236,9 @@ namespace gmsnippet {
   Snippeter::
   getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const
   {
+    // measure used to calculate weight:
+    // Weight = [Sum(TF(i) * IDF(i))] / (1 + |log(ESL) - log(length)|)
+
     size_t maxMatchesAllowed = 3;
 
     std::vector<SentenceWeighingResult> weighingResults;
@@ -269,6 +271,10 @@ namespace gmsnippet {
         weakTermIndex++;
       }
 
+      // divide weight by (1 + |log(ESL) - log(len(sentence))|)
+      weight /= (1 + std::abs(std::log(Snippeter::ESL) - std::log(getSentenceLength(sentenceInfo.sentenceNumber))));
+
+
       if (weight > weightThreshold) {
         if (weight > maxMatch1.weight) {
           maxMatch2 = maxMatch1;
@@ -286,7 +292,6 @@ namespace gmsnippet {
     weighingResults.push_back(maxMatch2);
 
     return weighingResults;
-
   }
 
   size_t
@@ -323,7 +328,16 @@ namespace gmsnippet {
     size_t sentenceNumber = tfTable_
             .at(weighingResult.term)[weighingResult.tfTableEntryIndex]
             .sentenceNumber;
-    size_t start = offsetTable_[sentenceNumber];
+    size_t start = offsetTable_.at(sentenceNumber);
+
+    return std::wstring(searchDoc_ + start, getSentenceLength(weighingResult.documentSentenceNumber));
+  }
+
+  size_t
+  Snippeter::
+  getSentenceLength(const size_t sentenceNumber) const
+  {
+    size_t start = offsetTable_.at(sentenceNumber);
     size_t end;
     try {
       end = offsetTable_.at(sentenceNumber + 1);
@@ -331,7 +345,8 @@ namespace gmsnippet {
       end = searchDocSize_;
     }
 
-    return std::wstring(searchDoc_ + start, end - start);
+    return end - start;
   }
+
 
 }
