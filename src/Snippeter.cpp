@@ -1,3 +1,4 @@
+#include <sys/stat.h>
 #include "Snippeter.h"
 
 namespace gmsnippet {
@@ -12,8 +13,9 @@ namespace gmsnippet {
   Snippeter::
   ~Snippeter()
   {
-    if (searchDoc_.get() != nullptr) {
-      munmap(searchDoc_.get(), searchDocSize_ * sizeof(wchar_t));
+    if (searchDoc_ != nullptr) {
+      delete[] searchDoc_;
+      searchDoc_ = nullptr;
     }
   }
 
@@ -45,15 +47,22 @@ namespace gmsnippet {
       throw std::runtime_error("Failed to load file into memory");
     }
 
-    searchDoc_.reset(new wchar_t[searchDocSize_]);
-
-    if (mbstowcs(searchDoc_.get(), file, searchDocSize_) == (size_t)-1) {
+    try {
+      searchDoc_ = new wchar_t[searchDocSize_]();
+    } catch (std::bad_alloc& e) {
       munmap(file, searchDocSize_);
+      throw std::runtime_error("Failed to allocate memory for wide character set file");
+    }
+
+    if (mbstowcs(searchDoc_, file, searchDocSize_) == (size_t)-1) {
+      munmap(file, searchDocSize_);
+      delete[] searchDoc_;
       perror("Error");
       throw std::runtime_error("Failed to switch to wide character set");
     }
 
     if (munmap(file, searchDocSize_) == -1) {
+      delete[] searchDoc_;
       perror("Error");
       throw std::runtime_error("Failed to free mapped file");
     }
@@ -73,18 +82,19 @@ namespace gmsnippet {
     offsetTable_.push_back(0);
     for (size_t pos = 0; pos < searchDocSize_ ; ++pos) {
 
-      current = searchDoc_.get()[pos];
+      current = searchDoc_[pos];
       if ((current == L'\n' && previous == L'\n') ||
           current == L'.' || current == L'?'|| current ==  L'!') {
         setTfIdf(wordStart, pos, sentenceNumber);
         offsetTable_.push_back(++pos);
         sentenceNumber++;
-        while(!iswalnum((wint_t)searchDoc_.get()[pos])){ pos++; }
+        while(pos < searchDocSize_ && !iswalnum((wint_t)searchDoc_[pos])){ pos++; }
         offsetTable_.push_back(pos);
         wordStart = pos;
         sentenceNumber++;
       }
-      else if (current == L' ' || current == L',') {
+      else if (current == L' ' || current == L',' ||
+               current == L':' || current == L';') {
         setTfIdf(wordStart, pos, sentenceNumber);
         wordStart = pos + 1;
       }
@@ -92,19 +102,18 @@ namespace gmsnippet {
 
     }
 
-    // if text had no sentence finishing punctuation marks
-    if (sentenceNumber == 0) {
-      setTfIdf(wordStart, searchDocSize_, sentenceNumber);
-      offsetTable_.push_back(searchDocSize_);
-    }
-
+    setTfIdf(wordStart, searchDocSize_, sentenceNumber);
   }
 
   void
   Snippeter::
   setTfIdf(size_t wordStart, size_t wordEnd, size_t sentenceNumber)
   {
-    std::wstring word(searchDoc_.get() + wordStart, wordEnd - wordStart);
+    if (wordStart >= wordEnd) {
+      return;
+    };
+
+    std::wstring word(searchDoc_ + wordStart, wordEnd - wordStart);
 
     if (!TextUtils::isalnum(word)) {
       return;
@@ -113,6 +122,7 @@ namespace gmsnippet {
     // unify all terms presentation
     TextUtils::lowercase(word);
     word = TextUtils::trim(word);
+
 
     // add up global term frequency
     try {
@@ -316,12 +326,12 @@ namespace gmsnippet {
     size_t start = offsetTable_[sentenceNumber];
     size_t end;
     try {
-      end = offsetTable_[sentenceNumber + 1];
+      end = offsetTable_.at(sentenceNumber + 1);
     } catch (std::out_of_range& e) {
       end = searchDocSize_;
     }
 
-    return std::wstring(searchDoc_.get() + start, end - start);
+    return std::wstring(searchDoc_ + start, end - start);
   }
 
 }

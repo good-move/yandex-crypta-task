@@ -82,7 +82,7 @@ namespace gmsnippet {
 
       std::unordered_map<std::wstring, std::vector<TFTableEntry>> tfTable_;
       std::unordered_map<std::wstring, size_t> idfTable_;
-      std::unique_ptr<wchar_t> searchDoc_{nullptr};
+      wchar_t* searchDoc_ = nullptr;
       std::vector<size_t> offsetTable_;
       size_t searchDocSize_;
 
@@ -92,7 +92,6 @@ namespace gmsnippet {
       struct TFTableEntry {
 
           // Sentence number in the search document.
-          // Figured out within |init| method
           size_t sentenceNumber;
 
           // Term Frequency in |sentenceNumber|'th sentence
@@ -146,7 +145,6 @@ namespace gmsnippet {
             return str.substr(first, (last - first + 1));
           }
 
-          // Checks if a wstring is alpha-numeric
           static bool isalnum(const std::wstring& str) {
             return std::all_of(str.begin(), str.end(), [](wchar_t letter){ return iswalnum((wint_t)letter); });
           }
