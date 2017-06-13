@@ -1,1 +1,1 @@
-# yandex-kripta-task
+
