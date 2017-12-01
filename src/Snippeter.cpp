@@ -164,7 +164,7 @@ namespace gmsnippet {
     }
 
     sortAndStripTokensSet(tokens, MAX_TOKENS_TO_USE);
-    const auto sentences = getFeasibleSentenceIndexes(tokens);
+    const auto& sentences = getFeasibleSentenceIndexes(tokens);
     return getSnippetFromSentences(sentences, tokens);
   }
 
@@ -229,27 +229,22 @@ namespace gmsnippet {
           const unordered_set<Snippeter::sentence_number_t>& sentences,
           const vector<wstring>& tokens) const
   {
-    vector<SentenceWeighingResult> weighedSentences(sentences.size());
+    vector<Snippeter::SentenceWeighingResult> weighedSentences(sentences.size());
 
     for (const auto& sentenceIndex : sentences) {
       SentenceWeighingResult result = countSentenceWeight(sentenceIndex, tokens);
       weighedSentences.push_back(result);
     }
 
+    sortSentencesByWeight(weighedSentences);
+    // trim to contain no more that MAX_SENTENCES_TO_USE
+    const auto maxTokensToUse = MAX_TOKENS_TO_USE;
+    weighedSentences.resize(min((unsigned long long)weighedSentences.size(), maxTokensToUse));
 
-    auto cmp = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
-        return res1.weight < res2.weight;
-    };
+    // decorate sentences if needed
+    // ... decoration code ...
 
-    sort(weighedSentences.begin(), weighedSentences.end(), cmp);
-    weighedSentences.resize(min((unsigned long long)weighedSentences.size(), 3ULL));
-
-    // decorate sentences
-
-    auto cmpByIndex = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
-        return res1.documentSentenceNumber < res2.documentSentenceNumber;
-    };
-    sort(weighedSentences.begin(), weighedSentences.end(), cmpByIndex);
+    sortSentencesByIndex(weighedSentences);
 
     return this->getStringSnippet(weighedSentences);
   }
@@ -282,6 +277,25 @@ namespace gmsnippet {
   getStringSnippet(const vector<Snippeter::SentenceWeighingResult>& results) const
   {
     return L"";
+  }
+
+  void
+  Snippeter::
+  sortSentencesByWeight(std::vector<Snippeter::SentenceWeighingResult>& weighedSentences) const
+  {
+    auto cmpByWeight = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
+        return res1.weight < res2.weight;
+    };
+    sort(weighedSentences.begin(), weighedSentences.end(), cmpByWeight);
+  }
+
+  void
+  Snippeter::
+  sortSentencesByIndex(std::vector<Snippeter::SentenceWeighingResult>& weighedSentences) const {
+    auto cmpByIndex = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
+        return res1.documentSentenceNumber < res2.documentSentenceNumber;
+    };
+    sort(weighedSentences.begin(), weighedSentences.end(), cmpByIndex);
   }
 
 }

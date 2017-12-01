@@ -23,6 +23,7 @@ namespace gmsnippet {
   class Snippeter {
 
       using sentence_number_t = unsigned long long;
+      using uint64_t = unsigned long long;
 
     public:
 
@@ -106,7 +107,8 @@ namespace gmsnippet {
       std::vector<size_t> offsetTable_;
       size_t searchDocSize_;
 
-      static const unsigned int MAX_TOKENS_TO_USE = 5;
+      static const uint64_t MAX_TOKENS_TO_USE = 5;
+      static const uint64_t MAX_SENTENCES_TO_USE = 3ULL;
 
       // -------------------------------------------------------------------------
       //                          Auxiliary classes
@@ -177,6 +179,9 @@ namespace gmsnippet {
 
       };
 
+      void sortSentencesByWeight(std::vector<SentenceWeighingResult>& weighedSentences) const;
+
+      void sortSentencesByIndex(std::vector<SentenceWeighingResult>& weighedSentences) const;
   }; // End of class Snippeter
 
 }
