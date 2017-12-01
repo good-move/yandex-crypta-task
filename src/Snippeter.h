@@ -31,7 +31,6 @@ namespace gmsnippet {
       // counting tf-IDF for each term in text document and building document offset table
       // for faster sentences access
       Snippeter(const std::string& filepath);
-      Snippeter(const std::wstring& filepath);
 
       ~Snippeter();
 
@@ -99,13 +98,6 @@ namespace gmsnippet {
 
       // Calclates sentence length based on the index if the sentence
       uint64_t getSentenceLength(sentence_number_t sentenceNumber) const;
-
-      // Calculates weights for sentences that match search query words
-      std::vector<SentenceWeighingResult>
-      getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const;
-
-      // Checks whether a |word| is met in |sentenceNum| and returns its TF on success
-      size_t getLowerTermTF(const std::wstring &word, size_t sentenceNum) const;
 
       // Finalizes snippet creation process
       // Returns a sentence that is to be present in the snippet
