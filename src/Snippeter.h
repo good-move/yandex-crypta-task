@@ -6,6 +6,7 @@
 #define KRIPTA_TASK_SNIPPETER_H
 
 #include <unordered_map>
+#include <unordered_set>
 #include <sys/mman.h>
 #include <algorithm>
 #include <iostream>
@@ -65,10 +66,6 @@ namespace gmsnippet {
       // Turns a search query string into a program-appropriate format
       std::vector<std::wstring> tokenizeQuery(std::wstring &query) const;
 
-      // This function is in charge of processing the index and formatted query
-      // so that "the best" snippet is created
-      std::wstring getBestSnippet(std::vector<std::wstring>& queryWords) const;
-
       // Fetches sentence numbers, which must be considered as
       // candidates for inclusion in the final snippet
       std::unordered_set<sentence_number_t>
@@ -76,12 +73,18 @@ namespace gmsnippet {
 
       // Sorts tokens set and trims it to contain at max |maxTokensCount| elements
       void
-      sortAndStripTokensSet(std::vector<std::wstring> &tokens, unsigned int maxTokensCount) const;
+      sortAndStripTokensSet(std::vector<std::wstring> &tokens, unsigned long long maxTokensCount) const;
 
       // General function that returns the final snippet, made from
       // passed sentence numbers and valid query tokens
       std::wstring getSnippetFromSentences(const std::unordered_set<sentence_number_t> &sentences,
                                            const std::vector<std::wstring> &tokens) const;
+
+      SentenceWeighingResult
+      countSentenceWeight(const unsigned long long int &index, const std::vector<std::wstring> &vector) const;
+
+      std::wstring
+      getStringSnippet(const std::vector<Snippeter::SentenceWeighingResult>& results) const;
 
       // Calculates weights for sentences that match search query words
       std::vector<SentenceWeighingResult>

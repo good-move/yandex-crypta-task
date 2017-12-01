@@ -1,5 +1,4 @@
 #include <sys/stat.h>
-#include <unordered_set>
 #include "Snippeter.h"
 
 namespace gmsnippet {
@@ -197,7 +196,7 @@ namespace gmsnippet {
 
   void
   Snippeter::
-  sortAndStripTokensSet(vector<wstring>& tokens, unsigned int maxTokensCount) const
+  sortAndStripTokensSet(vector<wstring>& tokens, unsigned long long maxTokensCount) const
   {
     auto idfWordCmp = [this](const std::wstring& s1, const std::wstring& s2) -> bool {
         return this->idfTable_.at(s1) < this->idfTable_.at(s2);
@@ -205,7 +204,7 @@ namespace gmsnippet {
     // sort tokens vector by occurrence count int the document DESC
     sort(tokens.begin(), tokens.end(), idfWordCmp);
     // make vector contain no more than maxTokensCount values
-    tokens.resize(min(tokens.size(), maxTokensCount));
+    tokens.resize(min((unsigned long long)tokens.size(), maxTokensCount));
   }
 
   unordered_set<Snippeter::sentence_number_t>
@@ -215,7 +214,7 @@ namespace gmsnippet {
     std::unordered_set<Snippeter::sentence_number_t> feasibleSentenceIndexes;
 
     for (const auto& token : tokens) {
-      for (const auto& entry : tfTable_[token]) {
+      for (const auto& entry : tfTable_.at(token)) {
         unsigned long long i = entry.sentenceNumber;
         feasibleSentenceIndexes.insert(i);
       }
@@ -230,93 +229,29 @@ namespace gmsnippet {
           const unordered_set<Snippeter::sentence_number_t>& sentences,
           const vector<wstring>& tokens) const
   {
+    vector<SentenceWeighingResult> weighedSentences(sentences.size());
 
-
-
-    return L"";
-  }
-
-  std::vector<Snippeter::SentenceWeighingResult>
-  Snippeter::
-  getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const
-  {
-    size_t maxMatchesAllowed = 3;
-
-    std::vector<SentenceWeighingResult> weighingResults;
-    // maxMatch1 is intended to always have bigger or
-    // equal weight to maxMatch2
-    SentenceWeighingResult maxMatch1, maxMatch2;
-    double weightThreshold = 0;
-
-    if (startWordIndex >= queryWords.size()) {
-      return weighingResults;
+    for (const auto& sentenceIndex : sentences) {
+      SentenceWeighingResult result = countSentenceWeight(sentenceIndex, tokens);
+      weighedSentences.push_back(result);
     }
 
-    const auto& strongerTerm = queryWords.at(startWordIndex);
-    const double strongerTermIDF = idfTable_.at(strongerTerm);
-    const size_t queryWordsSize = queryWords.size();
-    size_t tfTableEntryIndex = 0;
-    for (const auto& sentenceInfo : tfTable_.at(strongerTerm)) {
 
-      double weight = sentenceInfo.tf / strongerTermIDF;
+    auto cmp = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
+        return res1.weight < res2.weight;
+    };
 
-      // find intersects with other words and sum upp their weight
+    sort(weighedSentences.begin(), weighedSentences.end(), cmp);
+    weighedSentences.resize(min((unsigned long long)weighedSentences.size(), 3ULL));
 
-      size_t weakTermIndex = startWordIndex + 1;
-      size_t matches = 0;
-      while (weakTermIndex < queryWordsSize && matches < maxMatchesAllowed) {
-        const auto& weakerTerm = queryWords[weakTermIndex];
-        size_t tf = getLowerTermTF(weakerTerm, sentenceInfo.sentenceNumber);
-        weight += tf / idfTable_.at(weakerTerm);
-        matches += (tf > 0);
-        weakTermIndex++;
-      }
+    // decorate sentences
 
-      if (weight > weightThreshold) {
-        if (weight > maxMatch1.weight) {
-          maxMatch2 = maxMatch1;
-          maxMatch1 = SentenceWeighingResult{strongerTerm, weight, tfTableEntryIndex, sentenceInfo.sentenceNumber};
-        } else if (weight > maxMatch2.weight) {
-          maxMatch2 = SentenceWeighingResult{strongerTerm, weight, tfTableEntryIndex, sentenceInfo.sentenceNumber};
-        }
-        weightThreshold = maxMatch2.weight;
-      }
+    auto cmpByIndex = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
+        return res1.documentSentenceNumber < res2.documentSentenceNumber;
+    };
+    sort(weighedSentences.begin(), weighedSentences.end(), cmpByIndex);
 
-      tfTableEntryIndex++;
-    }
-
-    weighingResults.push_back(maxMatch1);
-    weighingResults.push_back(maxMatch2);
-
-    return weighingResults;
-
-  }
-
-  size_t
-  Snippeter::
-  getLowerTermTF(const std::wstring& word, size_t sentenceNum) const
-  {
-    const auto& sentences = tfTable_.at(word);
-
-    if (sentences.front().sentenceNumber > sentenceNum ||
-        sentences.back().sentenceNumber < sentenceNum) {
-      return 0;
-    }
-
-    size_t start = 0;
-    size_t end = sentences.size();
-    size_t middle = 0;
-
-    while(start < end) {
-      middle = (start + end) / 2;
-      if (sentenceNum <= sentences[middle].sentenceNumber) {
-        end = middle;
-      } else {
-        start = middle + 1;
-      }
-    }
-
-    return (sentences[start].sentenceNumber == sentenceNum) * sentences[start].tf;
+    return this->getStringSnippet(weighedSentences);
   }
 
   std::wstring
@@ -335,6 +270,18 @@ namespace gmsnippet {
     }
 
     return std::wstring(searchDoc_ + start, end - start);
+  }
+
+  Snippeter::SentenceWeighingResult
+  Snippeter::countSentenceWeight(const unsigned long long int &index, const std::vector<std::wstring> &vector) const {
+    return Snippeter::SentenceWeighingResult();
+  }
+
+  wstring
+  Snippeter::
+  getStringSnippet(const vector<Snippeter::SentenceWeighingResult>& results) const
+  {
+    return L"";
   }
 
 }
