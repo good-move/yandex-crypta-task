@@ -164,9 +164,9 @@ namespace gmsnippet {
       return L"Запрос не содержит слов, по которым можно составить сниппет.";
     }
 
-    sortAndStripTokensSet(tokens, maxTokensCount);
+    sortAndStripTokensSet(tokens, MAX_TOKENS_TO_USE);
     const auto sentences = getFeasibleSentenceIndexes(tokens);
-    return getSnippetFromSentences(tokens, sentences);
+    return getSnippetFromSentences(sentences, tokens);
   }
 
   std::vector<std::wstring>
@@ -208,11 +208,11 @@ namespace gmsnippet {
     tokens.resize(min(tokens.size(), maxTokensCount));
   }
 
-  unordered_set<unsigned long long>
+  unordered_set<Snippeter::sentence_number_t>
   Snippeter::
   getFeasibleSentenceIndexes(const vector<wstring>& tokens) const
   {
-    std::unordered_set<unsigned long long> feasibleSentenceIndexes;
+    std::unordered_set<Snippeter::sentence_number_t> feasibleSentenceIndexes;
 
     for (const auto& token : tokens) {
       for (const auto& entry : tfTable_[token]) {
@@ -226,8 +226,13 @@ namespace gmsnippet {
 
   std::wstring
   Snippeter::
-  getSnippetFromSentences(const unordered_set<unsigned long long>& sentences, const vector<wstring>& tokens) const
+  getSnippetFromSentences(
+          const unordered_set<Snippeter::sentence_number_t>& sentences,
+          const vector<wstring>& tokens) const
   {
+
+
+
     return L"";
   }
 

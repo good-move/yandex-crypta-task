@@ -21,6 +21,8 @@ namespace gmsnippet {
 
   class Snippeter {
 
+      using sentence_number_t = unsigned long long;
+
     public:
 
       // Initializes all main procedures for search document processing, namely:
@@ -67,6 +69,20 @@ namespace gmsnippet {
       // so that "the best" snippet is created
       std::wstring getBestSnippet(std::vector<std::wstring>& queryWords) const;
 
+      // Fetches sentence numbers, which must be considered as
+      // candidates for inclusion in the final snippet
+      std::unordered_set<sentence_number_t>
+      getFeasibleSentenceIndexes(const std::vector<std::wstring> &tokens) const;
+
+      // Sorts tokens set and trims it to contain at max |maxTokensCount| elements
+      void
+      sortAndStripTokensSet(std::vector<std::wstring> &tokens, unsigned int maxTokensCount) const;
+
+      // General function that returns the final snippet, made from
+      // passed sentence numbers and valid query tokens
+      std::wstring getSnippetFromSentences(const std::unordered_set<sentence_number_t> &sentences,
+                                           const std::vector<std::wstring> &tokens) const;
+
       // Calculates weights for sentences that match search query words
       std::vector<SentenceWeighingResult>
       getMaxWeightSentences(const std::vector<std::wstring>& queryWords, size_t startWordIndex) const;
@@ -87,13 +103,15 @@ namespace gmsnippet {
       std::vector<size_t> offsetTable_;
       size_t searchDocSize_;
 
+      static const unsigned int MAX_TOKENS_TO_USE = 5;
+
       // -------------------------------------------------------------------------
       //                          Auxiliary classes
 
       struct TFTableEntry {
 
           // Sentence number in the search document.
-          size_t sentenceNumber;
+          sentence_number_t sentenceNumber;
 
           // Term Frequency in |sentenceNumber|'th sentence
           size_t tf;
@@ -156,15 +174,6 @@ namespace gmsnippet {
 
       };
 
-
-      std::unordered_set<unsigned long long int>
-      getFeasibleSentenceIndexes(const std::vector<std::wstring> &tokens) const;
-
-      void
-      sortAndStripTokensSet(std::vector<std::wstring> &tokens, unsigned int maxTokensCount) const;
-
-      std::wstring getSnippetFromSentences(const std::unordered_set<unsigned long long int> &sentences,
-                                         const std::vector<std::wstring> &tokens) const;
   }; // End of class Snippeter
 
 }
