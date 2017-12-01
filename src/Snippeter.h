@@ -81,11 +81,24 @@ namespace gmsnippet {
       std::wstring getSnippetFromSentences(const std::unordered_set<sentence_number_t> &sentences,
                                            const std::vector<std::wstring> &tokens) const;
 
+      // Calculated sentence weight with index |index| for tokens in
+      // |tokens| vector
       SentenceWeighingResult
-      countSentenceWeight(const unsigned long long int &index, const std::vector<std::wstring> &vector) const;
+      countSentenceWeight(const unsigned long long int &index, const std::vector<std::wstring>& tokens) const;
 
+      // Constructs string that is the final snippet string, which includes
+      // sentences from |results| vector
       std::wstring
       getStringSnippet(const std::vector<Snippeter::SentenceWeighingResult>& results) const;
+
+      // Sorts sentence weighing results by sentence weight
+      void sortSentencesByWeight(std::vector<SentenceWeighingResult>& weighedSentences) const;
+
+      // Sorts sentence weighing results by sentence index
+      void sortSentencesByIndex(std::vector<SentenceWeighingResult>& weighedSentences) const;
+
+      // Calclates sentence length based on the index if the sentence
+      uint64_t getSentenceLength(sentence_number_t sentenceNumber) const;
 
       // Calculates weights for sentences that match search query words
       std::vector<SentenceWeighingResult>
@@ -109,6 +122,7 @@ namespace gmsnippet {
 
       static const uint64_t MAX_TOKENS_TO_USE = 5;
       static const uint64_t MAX_SENTENCES_TO_USE = 3ULL;
+      static const uint64_t BENCHMARK_SENTENCE_LENGTH = 60ULL;
 
       // -------------------------------------------------------------------------
       //                          Auxiliary classes
@@ -179,9 +193,6 @@ namespace gmsnippet {
 
       };
 
-      void sortSentencesByWeight(std::vector<SentenceWeighingResult>& weighedSentences) const;
-
-      void sortSentencesByIndex(std::vector<SentenceWeighingResult>& weighedSentences) const;
   }; // End of class Snippeter
 
 }

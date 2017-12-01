@@ -229,11 +229,10 @@ namespace gmsnippet {
           const unordered_set<Snippeter::sentence_number_t>& sentences,
           const vector<wstring>& tokens) const
   {
-    vector<Snippeter::SentenceWeighingResult> weighedSentences(sentences.size());
+    vector<SentenceWeighingResult> weighedSentences(sentences.size());
 
     for (const auto& sentenceIndex : sentences) {
-      SentenceWeighingResult result = countSentenceWeight(sentenceIndex, tokens);
-      weighedSentences.push_back(result);
+      weighedSentences.push_back(countSentenceWeight(sentenceIndex, tokens));
     }
 
     sortSentencesByWeight(weighedSentences);
@@ -267,9 +266,56 @@ namespace gmsnippet {
     return std::wstring(searchDoc_ + start, end - start);
   }
 
+  Snippeter::uint64_t
+  Snippeter::
+  getSentenceLength(sentence_number_t sentenceNumber) const
+  {
+    size_t start = offsetTable_[sentenceNumber];
+    size_t end;
+    try {
+      end = offsetTable_.at(sentenceNumber + 1);
+    } catch (std::out_of_range& e) {
+      end = searchDocSize_;
+    }
+
+    return end - start;
+  }
+
   Snippeter::SentenceWeighingResult
-  Snippeter::countSentenceWeight(const unsigned long long int &index, const std::vector<std::wstring> &vector) const {
-    return Snippeter::SentenceWeighingResult();
+  Snippeter::countSentenceWeight(
+          const sentence_number_t& sentenceNumber,
+          const std::vector<std::wstring>& tokens) const
+  {
+    double weight = 0;
+    sentence_number_t sentenceLength = getSentenceLength(sentenceNumber);
+    double penaltyScore = 1 + (abs(log(BENCHMARK_SENTENCE_LENGTH) - log(sentenceLength)));
+
+    uint64_t entryIndexForFirstToken = 0;
+    bool isEntryIndexSet = false;
+
+    for (const auto& token : tokens) {
+      double idf = (idfTable_.at(token) / searchDocSize_);
+      double tf = 0;
+
+      unsigned int index = 0;
+      for (const auto& entry : tfTable_.at(token)) {
+        if (entry.sentenceNumber == sentenceNumber) {
+          tf = entry.tf;
+          if (!isEntryIndexSet) {
+            entryIndexForFirstToken = index;
+            isEntryIndexSet = true;
+          }
+          break;
+        }
+        index++;
+      }
+
+      weight += (tf * idf);
+    }
+
+    weight /= penaltyScore;
+
+    return SentenceWeighingResult(tokens.front(), weight, entryIndexForFirstToken, sentenceNumber);
   }
 
   wstring
