@@ -164,6 +164,7 @@ namespace gmsnippet {
     }
 
     sortAndStripTokensSet(tokens, MAX_TOKENS_TO_USE);
+
     const auto& sentences = getFeasibleSentenceIndexes(tokens);
     return getSnippetFromSentences(sentences, tokens);
   }
@@ -180,7 +181,6 @@ namespace gmsnippet {
     }
 
     // Split query into words, filter unknown ones
-    // and sort remaining by idf in descending order
     std::vector<std::wstring> queryWords;
     while(!ss.eof()) {
       std::wstring word;
@@ -215,8 +215,8 @@ namespace gmsnippet {
 
     for (const auto& token : tokens) {
       for (const auto& entry : tfTable_.at(token)) {
-        unsigned long long i = entry.sentenceNumber;
-        feasibleSentenceIndexes.insert(i);
+        sentence_number_t number = entry.sentenceNumber;
+        feasibleSentenceIndexes.insert(number);
       }
     }
 
@@ -229,15 +229,18 @@ namespace gmsnippet {
           const unordered_set<Snippeter::sentence_number_t>& sentences,
           const vector<wstring>& tokens) const
   {
-    vector<SentenceWeighingResult> weighedSentences(sentences.size());
+    vector<SentenceWeighingResult> weighedSentences;
 
     for (const auto& sentenceIndex : sentences) {
-      weighedSentences.push_back(countSentenceWeight(sentenceIndex, tokens));
+      SentenceWeighingResult result = countSentenceWeight(sentenceIndex, tokens);
+      weighedSentences.push_back(result);
     }
 
+    weighedSentences.shrink_to_fit();
     sortSentencesByWeight(weighedSentences);
+
     // trim to contain no more that MAX_SENTENCES_TO_USE
-    const auto maxTokensToUse = MAX_TOKENS_TO_USE;
+    const auto maxTokensToUse = MAX_SENTENCES_TO_USE;
     weighedSentences.resize(min((unsigned long long)weighedSentences.size(), maxTokensToUse));
 
     // decorate sentences if needed
@@ -245,7 +248,59 @@ namespace gmsnippet {
 
     sortSentencesByIndex(weighedSentences);
 
-    return this->getStringSnippet(weighedSentences);
+    return getStringSnippet(weighedSentences);
+  }
+
+  Snippeter::SentenceWeighingResult
+  Snippeter::countSentenceWeight(
+          const sentence_number_t& sentenceNumber,
+          const std::vector<std::wstring>& tokens) const
+  {
+    double weight = 0;
+    sentence_number_t sentenceLength = getSentenceLength(sentenceNumber);
+    double penaltyScore = 1 + abs(log(BENCHMARK_SENTENCE_LENGTH) - log(sentenceLength));
+
+    wstring tokenToPut = L"";
+    uint64_t entryIndexForFirstToken = 0;
+    bool isEntryIndexSet = false;
+
+    for (const auto& token : tokens) {
+      double idf = searchDocSize_ / idfTable_.at(token);
+      double tf = 0;
+
+      unsigned int index = 0;
+      for (const auto& entry : tfTable_.at(token)) {
+        if (entry.sentenceNumber == sentenceNumber) {
+          tf = entry.tf;
+          if (!isEntryIndexSet) {
+            isEntryIndexSet = true;
+            tokenToPut = token;
+            entryIndexForFirstToken = index;
+          }
+          break;
+        }
+        index++;
+      }
+
+      weight += (tf * idf);
+    }
+
+    weight /= penaltyScore;
+
+    return SentenceWeighingResult(tokenToPut, weight, entryIndexForFirstToken, sentenceNumber);
+  }
+
+  wstring
+  Snippeter::
+  getStringSnippet(const vector<Snippeter::SentenceWeighingResult>& results) const
+  {
+    wstring snippet = getSentence(results.at(0));
+
+    for (uint64_t i = 1; i < results.size(); ++i) {
+      snippet += L" ... " + getSentence(results.at(i));
+    }
+
+    return snippet;
   }
 
   std::wstring
@@ -281,56 +336,12 @@ namespace gmsnippet {
     return end - start;
   }
 
-  Snippeter::SentenceWeighingResult
-  Snippeter::countSentenceWeight(
-          const sentence_number_t& sentenceNumber,
-          const std::vector<std::wstring>& tokens) const
-  {
-    double weight = 0;
-    sentence_number_t sentenceLength = getSentenceLength(sentenceNumber);
-    double penaltyScore = 1 + (abs(log(BENCHMARK_SENTENCE_LENGTH) - log(sentenceLength)));
-
-    uint64_t entryIndexForFirstToken = 0;
-    bool isEntryIndexSet = false;
-
-    for (const auto& token : tokens) {
-      double idf = (idfTable_.at(token) / searchDocSize_);
-      double tf = 0;
-
-      unsigned int index = 0;
-      for (const auto& entry : tfTable_.at(token)) {
-        if (entry.sentenceNumber == sentenceNumber) {
-          tf = entry.tf;
-          if (!isEntryIndexSet) {
-            entryIndexForFirstToken = index;
-            isEntryIndexSet = true;
-          }
-          break;
-        }
-        index++;
-      }
-
-      weight += (tf * idf);
-    }
-
-    weight /= penaltyScore;
-
-    return SentenceWeighingResult(tokens.front(), weight, entryIndexForFirstToken, sentenceNumber);
-  }
-
-  wstring
-  Snippeter::
-  getStringSnippet(const vector<Snippeter::SentenceWeighingResult>& results) const
-  {
-    return L"";
-  }
-
   void
   Snippeter::
   sortSentencesByWeight(std::vector<Snippeter::SentenceWeighingResult>& weighedSentences) const
   {
     auto cmpByWeight = [](const SentenceWeighingResult& res1, const SentenceWeighingResult& res2) ->int {
-        return res1.weight < res2.weight;
+        return res1.weight > res2.weight;
     };
     sort(weighedSentences.begin(), weighedSentences.end(), cmpByWeight);
   }
