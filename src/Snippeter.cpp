@@ -1,7 +1,10 @@
 #include <sys/stat.h>
+#include <unordered_set>
 #include "Snippeter.h"
 
 namespace gmsnippet {
+
+  using namespace std;
 
   Snippeter::
   Snippeter(const std::string& filepath)
@@ -152,17 +155,23 @@ namespace gmsnippet {
   Snippeter::
   getSnippet(std::wstring query) const
   {
-    std::vector<std::wstring> queryWords = getWordsFromQuery(query);
-    if (queryWords.empty()) {
-      return L"По вашему запросу ничего не найдено";
+    if (query.length() == 0) {
+      return L"Задан пустой запрос.";
     }
 
-    return getBestSnippet(queryWords);
+    std::vector<std::wstring> tokens = tokenizeQuery(query);
+    if (tokens.empty()) {
+      return L"Запрос не содержит слов, по которым можно составить сниппет.";
+    }
+
+    sortAndStripTokensSet(tokens, maxTokensCount);
+    const auto sentences = getFeasibleSentenceIndexes(tokens);
+    return getSnippetFromSentences(tokens, sentences);
   }
 
   std::vector<std::wstring>
   Snippeter::
-  getWordsFromQuery(std::wstring& query) const
+  tokenizeQuery(std::wstring &query) const
   {
     TextUtils::lowercase(query);
     std::wstringstream ss(query);
@@ -183,54 +192,43 @@ namespace gmsnippet {
       }
     }
 
-    auto idfWordCmp = [this](const std::wstring& s1, const std::wstring& s2) -> bool {
-      return this->idfTable_.at(s1) < this->idfTable_.at(s2);
-    };
-
-    sort(queryWords.begin(), queryWords.end(), idfWordCmp);
-
     return queryWords;
+  }
+
+  void
+  Snippeter::
+  sortAndStripTokensSet(vector<wstring>& tokens, unsigned int maxTokensCount) const
+  {
+    auto idfWordCmp = [this](const std::wstring& s1, const std::wstring& s2) -> bool {
+        return this->idfTable_.at(s1) < this->idfTable_.at(s2);
+    };
+    // sort tokens vector by occurrence count int the document DESC
+    sort(tokens.begin(), tokens.end(), idfWordCmp);
+    // make vector contain no more than maxTokensCount values
+    tokens.resize(min(tokens.size(), maxTokensCount));
+  }
+
+  unordered_set<unsigned long long>
+  Snippeter::
+  getFeasibleSentenceIndexes(const vector<wstring>& tokens) const
+  {
+    std::unordered_set<unsigned long long> feasibleSentenceIndexes;
+
+    for (const auto& token : tokens) {
+      for (const auto& entry : tfTable_[token]) {
+        unsigned long long i = entry.sentenceNumber;
+        feasibleSentenceIndexes.insert(i);
+      }
+    }
+
+    return feasibleSentenceIndexes;
   }
 
   std::wstring
   Snippeter::
-  getBestSnippet(std::vector<std::wstring>& queryWords) const
+  getSnippetFromSentences(const unordered_set<unsigned long long>& sentences, const vector<wstring>& tokens) const
   {
-    std::vector<SentenceWeighingResult> finalMatch(4);
-    const auto& matches1 = getMaxWeightSentences(queryWords, 0);
-    const auto& matches2 = getMaxWeightSentences(queryWords, 1);
-
-    if (matches2.empty()) {
-      if (matches1[1].term == L"") {
-        return getSentence(matches1[0]);
-      }
-      return getSentence(matches1[0]) + L" ... " + getSentence(matches1[1]);
-    }
-
-    // merge sort two matches
-    for (int k = 0, i = 0, j = 0; k < 4; k++) {
-      if (i==2) {
-        finalMatch[k] = matches2[j];
-        j++;
-      } else if (j==2) {
-        finalMatch[k] = matches1[i];
-        i++;
-      } else {
-        if (matches1[i].weight > matches2[j].weight) {
-          finalMatch[k] = matches1[i];
-          i++;
-        } else {
-          finalMatch[k] = matches2[i];
-          j++;
-        }
-      }
-    }
-
-    if (finalMatch[1].term == L"") {
-      return getSentence(finalMatch[0]);
-    }
-
-    return getSentence(finalMatch[0]) + L" ... " + getSentence(finalMatch[1]);
+    return L"";
   }
 
   std::vector<Snippeter::SentenceWeighingResult>

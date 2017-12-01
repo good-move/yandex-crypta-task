@@ -27,6 +27,7 @@ namespace gmsnippet {
       // counting tf-IDF for each term in text document and building document offset table
       // for faster sentences access
       Snippeter(const std::string& filepath);
+      Snippeter(const std::wstring& filepath);
 
       ~Snippeter();
 
@@ -60,7 +61,7 @@ namespace gmsnippet {
       struct TFTableEntry;
 
       // Turns a search query string into a program-appropriate format
-      std::vector<std::wstring> getWordsFromQuery(std::wstring& query) const;
+      std::vector<std::wstring> tokenizeQuery(std::wstring &query) const;
 
       // This function is in charge of processing the index and formatted query
       // so that "the best" snippet is created
@@ -156,6 +157,14 @@ namespace gmsnippet {
       };
 
 
+      std::unordered_set<unsigned long long int>
+      getFeasibleSentenceIndexes(const std::vector<std::wstring> &tokens) const;
+
+      void
+      sortAndStripTokensSet(std::vector<std::wstring> &tokens, unsigned int maxTokensCount) const;
+
+      std::wstring getSnippetFromSentences(const std::unordered_set<unsigned long long int> &sentences,
+                                         const std::vector<std::wstring> &tokens) const;
   }; // End of class Snippeter
 
 }
