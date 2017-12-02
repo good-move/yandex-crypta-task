@@ -9,10 +9,11 @@ int main(int argc, char* argv[])
   setlocale(LC_ALL, "ru_RU.UTF-8");
 
   if (argc < 2) {
+    const string programName(argv[0]);
     wcout << L"Не указано имя файла, по которому производится поиск." << endl <<
              L"Использование:" << endl <<
              L"1) less <файл с запросами> | snippeter <имя файла>" << endl <<
-             L"2) запустите `snippeter <имя файла>` и вводите запросы по одному в строке" << endl;
+             L"2) запустите `snippeter` <имя файла>` и вводите запросы по одному в строке" << endl;
     return 0;
   }
 
@@ -34,6 +35,7 @@ int main(int argc, char* argv[])
             << (tv_end.tv_usec - tv_start.tv_usec) << endl;
     }
   } catch(exception& e) {
+    wcout << "Error: ";
     wcout << e.what() << endl;
   }
 
