@@ -107,7 +107,7 @@ namespace gmsnippet {
       //                            Class State
 
       std::unordered_map<std::wstring, std::vector<TFTableEntry>> tfTable_;
-      std::unordered_map<std::wstring, size_t> idfTable_;
+      std::unordered_map<std::wstring, size_t> occurrencesTable_;
       wchar_t* searchDoc_ = nullptr;
       std::vector<size_t> offsetTable_;
       size_t searchDocSize_;

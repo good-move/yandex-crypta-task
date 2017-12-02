@@ -25,15 +25,17 @@ namespace gmsnippet {
   Snippeter::
   loadSearchDocument(const std::string& filepath)
   {
-    FILE* searchFile = fopen(filepath.c_str(), "r");
+    // open file and map in on the process address space
+    const int zeroOffset = 0;
+    FILE* inputFile = fopen(filepath.c_str(), "r");
 
-    if (searchFile == nullptr) {
+    if (inputFile == nullptr) {
       perror("Error");
       throw std::runtime_error("Failed to open file");
     }
 
-    int filed = fileno(searchFile);
-    long seekResult = lseek(filed, 0, SEEK_END);
+    int fileDescriptor = fileno(inputFile);
+    long seekResult = lseek(fileDescriptor, zeroOffset, SEEK_END);
     if (seekResult == -1) {
       perror("Error");
       throw std::runtime_error("Failed to get file length");
@@ -41,14 +43,16 @@ namespace gmsnippet {
 
     searchDocSize_ = (size_t) seekResult;
 
-    char* file = (char*) mmap(nullptr, searchDocSize_, PROT_READ, MAP_PRIVATE, filed, 0);
-    fclose(searchFile);
+    char* file = (char*) mmap(nullptr, searchDocSize_, PROT_READ, MAP_PRIVATE, fileDescriptor, zeroOffset);
+    fclose(inputFile);
 
     if (file == MAP_FAILED) {
       perror("Error");
       throw std::runtime_error("Failed to load file into memory");
     }
 
+    // convert mapped region to wide string (input text might
+    // have multi-byte encoding (utf-8, utf-16, etc.))
     try {
       searchDoc_ = new wchar_t[searchDocSize_]();
     } catch (std::bad_alloc& e) {
@@ -128,9 +132,9 @@ namespace gmsnippet {
 
     // add up global term frequency
     try {
-      idfTable_.at(word) += 1;
+      occurrencesTable_.at(word) += 1;
     } catch (std::out_of_range& e) {
-      idfTable_[word] = 1;
+      occurrencesTable_[word] = 1;
     }
 
     // register term frequency for currently processed sentence
@@ -186,7 +190,7 @@ namespace gmsnippet {
       std::wstring word;
       ss >> word;
       word = TextUtils::trim(word);
-      if (word.length() > 0 && TextUtils::isalnum(word) && idfTable_.count(word) > 0) {
+      if (word.length() > 0 && TextUtils::isalnum(word) && occurrencesTable_.count(word) > 0) {
         queryWords.push_back(word);
       }
     }
@@ -199,7 +203,7 @@ namespace gmsnippet {
   sortAndStripTokensSet(vector<wstring>& tokens, unsigned long long maxTokensCount) const
   {
     auto idfWordCmp = [this](const std::wstring& s1, const std::wstring& s2) -> bool {
-        return this->idfTable_.at(s1) < this->idfTable_.at(s2);
+        return this->occurrencesTable_.at(s1) < this->occurrencesTable_.at(s2);
     };
     // sort tokens vector by occurrence count int the document DESC
     sort(tokens.begin(), tokens.end(), idfWordCmp);
@@ -214,9 +218,12 @@ namespace gmsnippet {
     std::unordered_set<Snippeter::sentence_number_t> feasibleSentenceIndexes;
 
     for (const auto& token : tokens) {
+      uint64_t sentencesUsed = 0;
       for (const auto& entry : tfTable_.at(token)) {
+        if (sentencesUsed >= 2*MAX_SENTENCES_TO_USE) break;
         sentence_number_t number = entry.sentenceNumber;
         feasibleSentenceIndexes.insert(number);
+        sentencesUsed++;
       }
     }
 
@@ -265,7 +272,7 @@ namespace gmsnippet {
     bool isEntryIndexSet = false;
 
     for (const auto& token : tokens) {
-      double idf = searchDocSize_ / idfTable_.at(token);
+      double idf = searchDocSize_ / occurrencesTable_.at(token);
       double tf = 0;
 
       unsigned int index = 0;
